@@ -110,14 +110,11 @@ function sendStatus(mhost,murl)
   conn = nil
   conn = net.createConnection(net.TCP, 0)
   conn:on("receive", function(conn, payloadout)
-    --local dpos = string.find(payloadout,"Date:")
-    --print("time "..dpos.." "..string.sub(payloadout,dpos+5,dpos+27))
     print(payloadout)
   end)
   conn:on("connection",
    function(conn, payload)
      print("s "..murl);
-     --local auth = 'kitc3oOy7AEdF6nVo87Zgn4SIKDr3zZvR0DK'
      local auth = file.getcontents('auth.txt')
      conn:send('GET '..murl..' HTTP/1.0\r\n\Host: '..mhost..'\r\naccept: */*\r\nAuthorization: '..auth..'\r\n\r\n')end)
   conn:on("disconnection", function(conn, payload) print('Disconn') end)
@@ -130,7 +127,6 @@ end)
 
 --every 15 minutes send to server
 tmr.create():alarm(900*1000,tmr.ALARM_AUTO,function()
-    --t:read_temp(function(ltemps) temps = ltemps end , owpin)
     sendTemp()
 end)
 

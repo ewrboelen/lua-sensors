@@ -154,6 +154,7 @@ srv:listen(80,function(conn)
     local function handlePaths(path)
         print(node.heap())
         print("path "..path)
+        local buf = ""
         if(path=="/reset")then
             --print(" restarting ")
             node.restart()

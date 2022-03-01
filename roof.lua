@@ -1,15 +1,22 @@
 owpin=3
 temps={}--array
+servip="edsard.nl" 
+
 payloadFound = false
 t = require('ds18b20')
 if(mtype == nil)then
     mtype='roof'
 end
+print(mtype)
+local temps = {} 
 
 tmr.create():alarm(20*1000, tmr.ALARM_SINGLE, function() 
-    
-  readTemp(owpin)
-  
+  if(t == nil)then
+    t = require('ds18b20')
+  end
+  t:read_temp(function(ltemps)
+        temps = ltemps
+    end , owpin)
   tmr.create():alarm(1000, tmr.ALARM_SINGLE, function()
     if(temps ~= nil) then
     print("temps:")
@@ -17,20 +24,24 @@ tmr.create():alarm(20*1000, tmr.ALARM_SINGLE, function()
         print("t "..key.."  "..temp)
     end
     else
-      print(" sensor not found ")
+      print("sens not found")
     end
   
-    sendStatus(temps)
+    sendTemp()
   end)
 end)
 
 -- every  15 mins
 tmr.create():alarm(15*60*1000, tmr.ALARM_AUTO, function() 
-    temps = readTemp(owpin)
-    sendStatus(temps)
+    t:read_temp(function(ltemps)
+        temps = ltemps
+    end , owpin)
+    tmr.create():alarm(1000, tmr.ALARM_SINGLE, function()
+        sendTemp()
+    end)
 end)
- 
-function sendStatus(temps)
+
+function sendStatus(mhost,murl)
   if (wifi.sta.getip() == nil) then
     print("no ip")
     wifi.sta.disconnect()
@@ -39,36 +50,33 @@ function sendStatus(temps)
   else
     print("ip "..wifi.sta.getip())
   end
-    strTemp = ""
-    for key, temp in pairs(temps) do
-        strTemp = strTemp.."&t"..key.."="..temp
-    end
- 
-  conn = nil
+  print("cnct to "..mhost)
   conn = net.createConnection(net.TCP, 0)
-  conn:on("receive", function(conn, payload) print(payload)end)
-  conn:on("connection", function(conn, payload)
-   local mesg = 'GET /api/sens/'..mtype..'?s=1'..strTemp..' HTTP/1.0\r\n\Host: edsard.nl\r\naccept: */*\r\n'
-   local auth = file.getcontents('auth.txt')
-   mesg = mesg..'Authorization: '..auth..'\r\n\r\n'
-   print("s "..mesg)
-   conn:send(mesg)
+  conn:on("receive", function(conn, payloadout)
+    print(payloadout)
   end)
+  conn:on("connection",
+   function(conn, payload)
+     print("s "..murl);
+     local auth = file.getcontents('auth.txt')
+     conn:send('GET '..murl..' HTTP/1.0\r\n\Host: '..mhost..'\r\naccept: */*\r\nAuthorization: '..auth..'\r\n\r\n')end)
   conn:on("disconnection", function(conn, payload) print('Disconn') end)
-  conn:connect(80,'edsard.nl')
+  conn:connect(80,mhost)
 end
 
-function readTemp(pin)
-    t:read_temp(function(ltemp)
-        local coun=1
-         for addr, mtemp in pairs(ltemp) do
-            print(mtemp) 
-            temps[coun]=mtemp
-            coun=coun+1
-         end
-    end , pin,t.C)
+function sendTemp()
+   local i =1
+   local query=''
+   for addr, temp in pairs(temps) do
+    query = query..'&temp'..i..'='..temp
+    i=i+1
+   end
+   if i == 1 then
+    print("no temps")
+   end
+   local mesg = '/api/sens/'..mtype..'?s=1'..query
+   sendStatus(servip,mesg)
 end
-
 
 
 --small server
@@ -113,12 +121,14 @@ srv:listen(80,function(conn)
 
             -- return json
             buf=buf.."{\"sensorid\":\""..mtype.."\"," 
-            if(temps ~= nil) then  
+            if(temps ~= nil) then 
+                local coun=1 
                 for key, temp in pairs(temps) do
-                     buf = buf.."\"temp"..key.."\":"..temp.."\","
+                     buf = buf.."\"temp"..coun.."\":"..temp.."\","
+                     coun=coun+1
                 end
             end
-            buf = buf.."\"uptime\":"..tmr.time()..",\"id\":"..node.chipid()..",\"version\":1.0}"  
+            buf = buf.."\"uptime\":"..tmr.time()..",\"id\":"..node.chipid()..",\"version\":1.1}"  
            
          end
 
@@ -133,6 +143,5 @@ end)
     
 
 ow.setup(owpin)
-readTemp(owpin)
 --print("Temps: roof: "..temps[1].." case: "..temps[2])
 
